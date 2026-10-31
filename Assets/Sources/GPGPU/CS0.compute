@@ -1,0 +1,60 @@
+﻿#pragma kernel DisplaceMesh
+
+float Time;
+ByteAddressBuffer OriginalIndices;
+ByteAddressBuffer OriginalVertices;
+RWByteAddressBuffer DisplacedVertices;
+
+float3 LoadOriginalVertex(uint index)
+{
+    uint pi = index * 6 * 4; // index * (3[position.xyz] + 3[normal.xyz]) * 4[bytes]
+    return asfloat(OriginalVertices.Load3(pi));
+}
+
+void StoreDisplacedVertex(uint index, float3 position, float3 normal)
+{
+    uint pi = index * 6 * 4; // index * (3[position.xyz] + 3[normal.xyz]) * 4[bytes]
+    uint ni = pi + 3 * 4; // pi + 3[position.xyz] * 4[bytes]
+    DisplacedVertices.Store3(pi, asuint(position));
+    DisplacedVertices.Store3(ni, asuint(normal));
+}
+
+float3 DispalcePosition(float3 p)
+{
+    float3 disp = float3(
+        0.1 * (sin(1.3 * p.y + 4.1 * Time) + sin(2.9 * p.z + 5.3 * Time)),
+        0.1 * (sin(1.9 * p.z + 4.3 * Time) + sin(3.1 * p.x + 5.9 * Time)),
+        0.1 * (sin(2.3 * p.x + 4.7 * Time) + sin(3.7 * p.y + 6.1 * Time))
+        );
+    return p + disp;
+}
+
+float3 CalculateNormal(float3 p0, float3 p1, float3 p2)
+{
+    float3 d10 = p1 - p0;
+    float3 d20 = p2 - p0;
+    return normalize(cross(d10, d20));
+}
+
+[numthreads(256, 1, 1)]
+void DisplaceMesh(uint id : SV_DispatchThreadID)
+{
+    // Load original vertices
+    uint3 triIndex = OriginalIndices.Load3(id * 3 * 4); // id * 3[triangle vertices] * 4[bytes]
+    float3 p0 = LoadOriginalVertex(triIndex.x);
+    float3 p1 = LoadOriginalVertex(triIndex.y);
+    float3 p2 = LoadOriginalVertex(triIndex.z);
+
+    // Displace positions
+    float3 dp0 = DispalcePosition(p0);
+    float3 dp1 = DispalcePosition(p1);
+    float3 dp2 = DispalcePosition(p2);
+
+    // Calculate normals
+    float3 cn = CalculateNormal(dp0, dp1, dp2);
+
+    // Store modified vertices
+    StoreDisplacedVertex(triIndex.x, dp0, cn);
+    StoreDisplacedVertex(triIndex.y, dp1, cn);
+    StoreDisplacedVertex(triIndex.z, dp2, cn);
+}

@@ -1,0 +1,52 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWStructuredBuffer<float> u_pre;
+RWStructuredBuffer<float> u_now;
+RWStructuredBuffer<float> u_nex;
+float _StepT;
+float _Velocity;
+int _Size;
+int _Div;
+
+[numthreads(32,32,1)]
+void CSMain (uint3 id : SV_DispatchThreadID, uint3 gi : SV_GroupID)
+{
+    int x = id.x + 0 * 32; // id は複数グループを通してつけられている
+    int y = id.y + 0 * 32;
+
+    float dx = 10.0 / 32;
+    float dt = 1.0 / (60.0 * 1.0);
+    float c = 2.0;
+    float k = 0.15;
+    float right = x < _Size ? u_now[(x + 1) + y * _Size] : 0;
+    float left = x > 0 ? u_now[(x - 1) + y * _Size] : 0;
+    float upper = y < _Size ? u_now[x + (y + 1) * _Size] : 0;
+    float lower = y > 0 ? u_now[x + (y - 1) * _Size] : 0;
+
+    float ur = x < _Size ? (y < _Size ? u_now[(x + 1) + (y + 1) * _Size] : 0) : 0;
+    float ul = x > 0 ? ( y < _Size ? u_now[(x - 1) + (y + 1) * _Size] : 0) : 0;
+    float lr = x < _Size ? (y > 0 ? u_now[(x + 1) + (y - 1) * _Size] : 0) : 0;
+    float ll = x > 0 ? ( y > 0 ? u_now[(x - 1) + (y - 1) * _Size] : 0) : 0;
+
+    //for (int x = 1; x < 257; x++) {
+    //    for (int y = 1; y < 257; y++) {
+            u_nex[x + y * _Size] = 2 * u_now[x + y * _Size] - u_pre[x + y * _Size]
+                + (c * dt / dx) * (c * dt / dx) * (
+                    (right - u_now[x + y * _Size]) * 0.0417856
+                    + (left - u_now[x + y * _Size]) * 0.0417856
+                    + (upper - u_now[x + y * _Size]) * 0.0417856
+                    + (lower - u_now[x + y * _Size]) * 0.0417856
+                    + (ur - u_now[x + y * _Size]) * 0.0299101
+                    + (ul - u_now[x + y * _Size]) * 0.0299101
+                    + (lr - u_now[x + y * _Size]) * 0.0299101
+                    + (ll - u_now[x + y * _Size]) * 0.0299101)
+                - (k * dt) * (u_now[x + y * _Size] - u_pre[x + y * _Size]);
+            
+    //    }
+    //}
+    //C[id.x] = A[id.x] + B[id.x];
+    //Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+}
